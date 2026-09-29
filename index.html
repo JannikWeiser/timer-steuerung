@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Timer-Steuerung</title>
+<style>
+  :root {
+    --bg: #15171c; --panel: #1f232b; --panel-2: #272c36; --line: #343a46;
+    --text: #e8eaef; --muted: #9aa3b2; --accent: #d4163c; --ok: #2fbf71; --warn: #e6a100;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+           padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 17px; margin: 0 auto 0 0; font-weight: 600; }
+  main { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 16px; }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+           padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .panel-head { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
+  .badge { font-size: 12px; font-weight: 700; background: var(--panel-2); color: var(--muted);
+           border-radius: 6px; padding: 2px 8px; }
+  .panel-head h2 { margin: 0; font-size: 18px; flex: 1 1 8ch; min-width: 8ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .live { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .live.on { color: var(--ok); }
+  .live.on::before { background: var(--ok); }
+
+  form.login { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
+  @media (max-width: 520px) { form.login { grid-template-columns: 1fr; } }
+  input { background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+          border-radius: 8px; padding: 9px 10px; font: inherit; min-width: 0; }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 8px; padding: 10px 14px;
+           cursor: pointer; background: var(--panel-2); color: var(--text); }
+  button:hover:not(:disabled) { filter: brightness(1.2); }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--accent); color: #fff; }
+  button.ok { background: var(--ok); color: #0b1a11; }
+  button.warn { background: var(--warn); color: #1d1500; }
+  button.ghost { background: transparent; color: var(--muted); padding: 6px 8px; font-weight: 500; }
+
+  .preview { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000;
+             border-radius: 8px; overflow: hidden; }
+  .preview iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
+  .status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+            background: var(--panel-2); border-radius: 8px; padding: 10px 12px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .status .time { font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 700; }
+  .status .state { margin-left: auto; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+  .controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .controls button { overflow-wrap: anywhere; hyphens: auto; }
+  .controls button { padding: 14px 8px; }
+  .links { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  .links code { background: var(--panel-2); padding: 3px 6px; border-radius: 6px; color: var(--text);
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .links a { color: var(--muted); }
+  .msg { font-size: 13px; min-height: 18px; color: var(--muted); }
+  .msg.err { color: #ff6b81; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Timer-Steuerung</h1>
+  <button class="primary" id="all-restart">Beide neu starten</button>
+  <button class="warn" id="all-pause">Beide pausieren</button>
+  <button class="ok" id="all-resume">Beide fortsetzen</button>
+</header>
+<main id="panels"></main>
+
+<template id="panel-tpl">
+  <section class="panel">
+    <div class="panel-head">
+      <span class="badge"></span>
+      <h2>Nicht verbunden</h2>
+      <span class="live hidden"></span>
+      <button class="ghost logout hidden" type="button">Abmelden</button>
+    </div>
+
+    <form class="login">
+      <input name="id" placeholder="Timer-Name" autocomplete="off" required>
+      <input name="password" type="password" placeholder="Passwort" required>
+      <button class="primary" type="submit">Verbinden</button>
+    </form>
+
+    <div class="connected hidden" style="display:contents">
+      <div class="preview"><iframe title="Timer-Vorschau" allow="autoplay"></iframe></div>
+      <div class="status">
+        <span class="dot"></span>
+        <span class="label"></span>
+        <span class="time"></span>
+        <span class="state"></span>
+      </div>
+      <div class="controls">
+        <button class="primary restart">Neustart</button>
+        <button class="warn toggle">Pause</button>
+        <button class="skip">Segment überspringen</button>
+      </div>
+      <div class="links">
+        Display-Link: <code class="display-url"></code>
+        <button class="ghost copy" type="button">Kopieren</button>
+        <a class="edit-link" target="_blank" rel="noreferrer">Auf timer.itsblue.de bearbeiten ↗</a>
+      </div>
+    </div>
+    <div class="msg"></div>
+  </section>
+</template>
+
+<script>
+const SITE = "https://timer.itsblue.de";
+const API = SITE + "/api";
+const WS_URL = "wss://timer.itsblue.de/api/ws";
+
+// --- Zeitlogik, portiert von timer.itsblue.de ---
+function roundState(t, now) {
+  let stopped = false;
+  if (t.stop_at && t.stop_at < now) { now = t.stop_at; stopped = true; }
+  const r = now - t.start_at;
+  const total = t.segments.reduce((s, x) => s + x.time, 0);
+  const pre = t.display_options?.pre_start_behaviour;
+  if (r < 0 && pre === "ShowFirstSegment") return { inRound: 1, state: "waiting" };
+  if (r < 0 && pre === "ShowLastSegment") return { inRound: total, state: "waiting" };
+  if (!t.repeat && !stopped && r > total) return { inRound: total, state: "finished" };
+  return { inRound: Math.floor(((r % total) + total) % total), state: stopped ? "stopped" : (r < 0 ? "waiting" : "running") };
+}
+function segmentAt(inRound, segments) {
+  let e = inRound, n = 0, remaining = 0;
+  while (e > 0) { remaining = Math.floor(segments[n].time - e); e -= segments[n].time; n++; }
+  return { segment: segments[Math.max(n - 1, 0)], remaining };
+}
+function fmt(ms) {
+  let s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; s %= 60;
+  const p = v => String(v).padStart(2, "0");
+  return h ? `${p(h)}:${p(m)}:${p(s)}` : `${p(m)}:${p(s)}`;
+}
+
+// --- Speicher (nur in diesem Browser) ---
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+};
+
+class TimerPanel {
+  constructor(slot) {
+    this.slot = slot;
+    this.el = document.getElementById("panel-tpl").content.firstElementChild.cloneNode(true);
+    this.$ = sel => this.el.querySelector(sel);
+    this.$(".badge").textContent = "Timer " + slot;
+    this.timer = null;
+    this.busy = false;
+    this.ws = null;
+    this.clockOffset = 0;
+    this.clockSamples = [];
+
+    this.$("form.login").addEventListener("submit", e => { e.preventDefault(); this.login(); });
+    this.$(".logout").addEventListener("click", () => this.logout());
+    this.$(".restart").addEventListener("click", () => {
+      if (this.state() === "running" && !confirm(`Timer ${this.slot} („${this.timer.id}“) wirklich neu starten?`)) return;
+      this.restart();
+    });
+    this.$(".toggle").addEventListener("click", () => this.timer?.stop_at ? this.resume() : this.pause());
+    this.$(".skip").addEventListener("click", () => this.skip());
+    this.$(".copy").addEventListener("click", () => {
+      navigator.clipboard?.writeText(this.displayUrl()).then(() => this.msg("Link kopiert."));
+    });
+
+    const saved = store.get("slot:" + slot);
+    if (saved?.id) {
+      this.$("[name=id]").value = saved.id;
+      if (saved.token) { this.id = saved.id; this.token = saved.token; this.showConnected(); }
+    }
+  }
+
+  displayUrl() { return `${SITE}/t/${encodeURIComponent(this.id)}`; }
+  now() { return Math.round(Date.now() + this.clockOffset); } // Serverzeit (ganze ms), wie auf den Displays
+  state() { return this.timer ? roundState(this.timer, this.now()).state : null; }
+  msg(text, err = false) { const m = this.$(".msg"); m.textContent = text || ""; m.classList.toggle("err", err); }
+
+  async login() {
+    const id = this.$("[name=id]").value.trim();
+    const password = this.$("[name=password]").value;
+    this.msg("Verbinde …");
+    try {
+      const r = await fetch(`${API}/timer/token`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, password }),
+      });
+      if (!r.ok) throw new Error(r.status === 401 || r.status === 403 || r.status === 404
+        ? "Name oder Passwort falsch." : `Fehler ${r.status}`);
+      const data = await r.json();
+      this.id = id; this.token = data.token;
+      store.set("slot:" + this.slot, { id, token: data.token });
+      this.$("[name=password]").value = "";
+      this.msg("");
+      this.showConnected();
+    } catch (e) { this.msg(e.message, true); }
+  }
+
+  logout() {
+    store.set("slot:" + this.slot, { id: this.id });
+    this.token = null; this.timer = null;
+    this.disconnect();
+    this.$(".live").classList.add("hidden");
+    this.$(".connected").classList.add("hidden");
+    this.$("form.login").classList.remove("hidden");
+    this.$(".logout").classList.add("hidden");
+    this.$("h2").textContent = "Nicht verbunden";
+    this.$("iframe").src = "about:blank";
+    this.msg("");
+  }
+
+  showConnected() {
+    this.$("form.login").classList.add("hidden");
+    this.$(".connected").classList.remove("hidden");
+    this.$(".logout").classList.remove("hidden");
+    this.$("h2").textContent = this.id;
+    this.$("iframe").src = this.displayUrl();
+    this.$(".display-url").textContent = this.displayUrl();
+    this.$(".edit-link").href = `${SITE}/manage/login`;
+    this.$(".live").classList.remove("hidden");
+    this.connect();
+  }
+
+  // Live-Verbindung wie bei den Displays: "Hello" abonniert den Timer,
+  // der Server schickt danach jede Änderung als "Timer"-Nachricht.
+  connect() {
+    this.disconnect();
+    this.setLive(false);
+    const ws = this.ws = new WebSocket(WS_URL);
+    let pingSent = 0;
+    const ping = () => { pingSent = performance.now(); ws.send(JSON.stringify({ type: "GetTime" })); };
+
+    ws.addEventListener("open", () => {
+      ws.send(JSON.stringify({ type: "Hello", data: this.id }));
+      ping();
+      // Uhr zuerst schnell, danach alle 10 s abgleichen
+      this.pingTimer = setInterval(() => ping(), 1000);
+      setTimeout(() => { if (this.ws !== ws) return; clearInterval(this.pingTimer); this.pingTimer = setInterval(ping, 10000); }, 5000);
+    });
+    ws.addEventListener("message", e => {
+      const m = JSON.parse(e.data);
+      if (m.type === "Timer") {
+        if (!this.busy) this.timer = m.data;
+        this.setLive(true);
+        if (this.$(".msg").classList.contains("err") && /Verbindung/.test(this.$(".msg").textContent)) this.msg("");
+      } else if (m.type === "Timestamp") {
+        const rtt = performance.now() - pingSent;
+        this.clockSamples = [...this.clockSamples.slice(-9), { rtt, offset: m.data + rtt / 2 - Date.now() }];
+        this.clockOffset = this.clockSamples.reduce((a, b) => (b.rtt < a.rtt ? b : a)).offset;
+      } else if (m.type === "Error") {
+        this.msg(`Server: ${m.data?.[1] ?? m.data}`, true);
+      }
+    });
+    const onDown = () => {
+      if (this.ws !== ws) return;
+      this.disconnect();
+      this.setLive(false);
+      this.msg("Verbindung unterbrochen – verbinde neu …", true);
+      this.reconnectTimer = setTimeout(() => this.connect(), 2000);
+    };
+    ws.addEventListener("close", onDown);
+    ws.addEventListener("error", onDown);
+  }
+
+  disconnect() {
+    clearInterval(this.pingTimer);
+    clearTimeout(this.reconnectTimer);
+    const ws = this.ws; this.ws = null;
+    ws?.close();
+  }
+
+  setLive(on) {
+    const el = this.$(".live");
+    el.classList.toggle("on", on);
+    el.textContent = on ? "Live" : "Verbinde …";
+  }
+
+  // Holt vor jedem Befehl den vollständigen Timer per API: Die WebSocket-Daten
+  // enthalten kein "metadata"-Feld, ohne das der Server das Update ablehnt.
+  async update(makeChanges) {
+    if (!this.token || this.busy) return;
+    this.busy = true;
+    const url = `${API}/timer/${encodeURIComponent(this.id)}`;
+    try {
+      const r0 = await fetch(url, { cache: "no-store" });
+      if (!r0.ok) throw new Error(`Timer konnte nicht geladen werden (Fehler ${r0.status})`);
+      const fresh = await r0.json();
+      const changes = makeChanges(fresh);
+      if (!changes) return;
+      const r = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.token}` },
+        body: JSON.stringify({ ...fresh, ...changes }),
+      });
+      if (r.status === 401 || r.status === 403) { this.logout(); throw new Error("Anmeldung abgelaufen – bitte neu verbinden."); }
+      if (!r.ok) throw new Error(`Fehler ${r.status}: ${(await r.text()).slice(0, 150)}`);
+      this.timer = await r.json();
+      this.msg("");
+    } catch (e) {
+      this.msg(e instanceof TypeError ? `Keine Verbindung zur API (${e.message})` : e.message, true);
+    } finally { this.busy = false; this.render(); }
+  }
+
+  // Aktionen wie in der Original-Oberfläche, aber mit Serverzeit statt Mac-Uhr
+  restart() { return this.update(t => ({ start_at: this.now() + (t.metadata?.delay_start_stop || 0), stop_at: undefined })); }
+  pause()   { return this.update(t => t.stop_at ? null : { stop_at: this.now() }); }
+  resume()  { return this.update(t => t.stop_at ? { start_at: this.now() - (t.stop_at - t.start_at), stop_at: undefined } : null); }
+  skip() {
+    return this.update(t => {
+      const { inRound, state } = roundState(t, this.now());
+      if (state !== "running") return null;
+      return { start_at: t.start_at - segmentAt(inRound, t.segments).remaining, stop_at: undefined };
+    });
+  }
+
+  render() {
+    const t = this.timer;
+    if (!t || !t.segments?.length) return;
+    const { inRound, state } = roundState(t, this.now());
+    const { segment, remaining } = segmentAt(inRound, t.segments);
+    this.$(".dot").style.background = segment.color;
+    this.$(".label").textContent = segment.label;
+    this.$(".time").textContent = fmt(remaining + (segment.count_to || 0));
+    this.$(".state").textContent = { running: "läuft", stopped: "pausiert", waiting: "wartet", finished: "beendet" }[state];
+    const toggle = this.$(".toggle");
+    toggle.textContent = t.stop_at ? "Fortsetzen" : "Pause";
+    toggle.className = t.stop_at ? "ok toggle" : "warn toggle";
+    this.$(".skip").disabled = state !== "running" || this.busy;
+    toggle.disabled = this.$(".restart").disabled = this.busy;
+  }
+}
+
+const panels = ["A", "B"].map(s => new TimerPanel(s));
+panels.forEach(p => document.getElementById("panels").appendChild(p.el));
+
+document.getElementById("all-restart").onclick = () => {
+  if (confirm("Beide Timer neu starten?")) panels.forEach(p => p.restart());
+};
+document.getElementById("all-pause").onclick = () => panels.forEach(p => p.pause());
+document.getElementById("all-resume").onclick = () => panels.forEach(p => p.resume());
+
+setInterval(() => panels.forEach(p => p.render()), 250);
+</script>
+</body>
+</html>
