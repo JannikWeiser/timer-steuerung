@@ -64,14 +64,54 @@
   .msg { font-size: 13px; min-height: 18px; color: var(--muted); }
   .msg.err { color: #ff6b81; }
   .hidden { display: none !important; }
+  .mobile-only, .short { display: none; }
+
+  /* Handy: beide Timer ohne Scrollen, Vorschau durch kompakte Farbkachel ersetzt */
+  @media (max-width: 700px), (max-height: 560px) and (max-width: 1000px) {
+    .mobile-only { display: inline-block; }
+    .desktop-only, .long { display: none !important; }
+    .short { display: inline; }
+    body { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; font-size: 14px; }
+    header { flex-wrap: nowrap; gap: 6px; padding: 8px 10px calc(8px) 10px;
+             padding-top: max(8px, env(safe-area-inset-top)); }
+    header h1 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 2px 0 0; }
+    header button { flex: 1; padding: 10px 4px; font-size: 14px; }
+    main { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr); grid-template-rows: repeat(2, minmax(0, 1fr));
+           gap: 8px; padding: 8px 10px; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+    .panel { padding: 8px; gap: 6px; min-height: 0; border-radius: 10px; }
+    .panel-head { flex-wrap: nowrap; gap: 6px; }
+    .panel-head h2 { font-size: 15px; flex: 1 1 auto; min-width: 0; }
+    .badge { font-size: 11px; padding: 2px 6px; }
+    .live { font-size: 0; gap: 0; }
+    button.ghost { padding: 4px 6px; font-size: 12px; }
+    form.login { grid-template-columns: 1fr 1fr; }
+    form.login button { grid-column: 1 / -1; }
+    input { font-size: 16px; } /* verhindert Auto-Zoom auf iOS */
+    .status { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr;
+              align-items: center; gap: 0 8px; padding: 6px 10px; background: var(--seg, var(--panel-2));
+              color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.55); }
+    .status .dot { display: none; }
+    .status .label { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .status .state { grid-column: 2; grid-row: 1; margin: 0; color: inherit; font-size: 11px; font-weight: 700;
+                     background: rgba(0,0,0,.35); border-radius: 4px; padding: 1px 6px; text-shadow: none; }
+    .status .time { grid-column: 1 / -1; grid-row: 2; text-align: center; line-height: 1;
+                    font-size: clamp(30px, 9vh, 72px); }
+    .controls { gap: 6px; }
+    .controls button { padding: 12px 4px; font-size: 15px; }
+    .msg { font-size: 12px; min-height: 0; line-height: 1.2; }
+    .msg:empty { display: none; }
+  }
+  @media (max-width: 1000px) and (max-height: 560px) and (orientation: landscape) {
+    main { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); }
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>Timer-Steuerung</h1>
-  <button class="primary" id="all-restart">Beide neu starten</button>
-  <button class="warn" id="all-pause">Beide pausieren</button>
-  <button class="ok" id="all-resume">Beide fortsetzen</button>
+  <h1><span class="long">Timer-Steuerung</span><span class="short">Beide:</span></h1>
+  <button class="primary" id="all-restart"><span class="long">Beide neu starten</span><span class="short">Neustart</span></button>
+  <button class="warn" id="all-pause"><span class="long">Beide pausieren</span><span class="short">Pause</span></button>
+  <button class="ok" id="all-resume"><span class="long">Beide fortsetzen</span><span class="short">Weiter</span></button>
 </header>
 <main id="panels"></main>
 
@@ -81,6 +121,7 @@
       <span class="badge"></span>
       <h2>Nicht verbunden</h2>
       <span class="live hidden"></span>
+      <button class="ghost copy mobile-only hidden" type="button">Link</button>
       <button class="ghost logout hidden" type="button">Abmelden</button>
     </div>
 
@@ -91,7 +132,7 @@
     </form>
 
     <div class="connected hidden" style="display:contents">
-      <div class="preview"><iframe title="Timer-Vorschau" allow="autoplay"></iframe></div>
+      <div class="preview desktop-only"><iframe title="Timer-Vorschau" allow="autoplay"></iframe></div>
       <div class="status">
         <span class="dot"></span>
         <span class="label"></span>
@@ -101,9 +142,9 @@
       <div class="controls">
         <button class="primary restart">Neustart</button>
         <button class="warn toggle">Pause</button>
-        <button class="skip">Segment überspringen</button>
+        <button class="skip"><span class="long">Segment überspringen</span><span class="short">Segment ⏭</span></button>
       </div>
-      <div class="links">
+      <div class="links desktop-only">
         Display-Link: <code class="display-url"></code>
         <button class="ghost copy" type="button">Kopieren</button>
         <a class="edit-link" target="_blank" rel="noreferrer">Auf timer.itsblue.de bearbeiten ↗</a>
@@ -169,9 +210,9 @@ class TimerPanel {
     });
     this.$(".toggle").addEventListener("click", () => this.timer?.stop_at ? this.resume() : this.pause());
     this.$(".skip").addEventListener("click", () => this.skip());
-    this.$(".copy").addEventListener("click", () => {
-      navigator.clipboard?.writeText(this.displayUrl()).then(() => this.msg("Link kopiert."));
-    });
+    this.el.querySelectorAll(".copy").forEach(b => b.addEventListener("click", () => {
+      navigator.clipboard?.writeText(this.displayUrl()).then(() => this.msg("Display-Link kopiert."));
+    }));
 
     const saved = store.get("slot:" + slot);
     if (saved?.id) {
@@ -213,6 +254,7 @@ class TimerPanel {
     this.$(".connected").classList.add("hidden");
     this.$("form.login").classList.remove("hidden");
     this.$(".logout").classList.add("hidden");
+    this.$(".panel-head .copy").classList.add("hidden");
     this.$("h2").textContent = "Nicht verbunden";
     this.$("iframe").src = "about:blank";
     this.msg("");
@@ -222,6 +264,7 @@ class TimerPanel {
     this.$("form.login").classList.add("hidden");
     this.$(".connected").classList.remove("hidden");
     this.$(".logout").classList.remove("hidden");
+    this.$(".panel-head .copy").classList.remove("hidden");
     this.$("h2").textContent = this.id;
     this.$("iframe").src = this.displayUrl();
     this.$(".display-url").textContent = this.displayUrl();
@@ -328,6 +371,7 @@ class TimerPanel {
     const { inRound, state } = roundState(t, this.now());
     const { segment, remaining } = segmentAt(inRound, t.segments);
     this.$(".dot").style.background = segment.color;
+    this.$(".status").style.setProperty("--seg", segment.color);
     this.$(".label").textContent = segment.label;
     this.$(".time").textContent = fmt(remaining + (segment.count_to || 0));
     this.$(".state").textContent = { running: "läuft", stopped: "pausiert", waiting: "wartet", finished: "beendet" }[state];
