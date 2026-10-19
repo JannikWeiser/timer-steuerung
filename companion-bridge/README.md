@@ -23,21 +23,22 @@ Stream Deck → Companion ──WebSocket──► Relais ──WebSocket──�
 
 | | | |
 |---|---|---|
-| **A Reset** (rot) | **A Start/Pause/Fortsetzen** (gelb) | **A Klettern/Segment** (grün) |
-| **B Reset** (rot) | **B Start/Pause/Fortsetzen** (gelb) | **B Klettern/Segment** (grün) |
+| **RESET beide** (1 s halten) | **Uhr Route 1** (Zeit, grün beim Klettern, rot im roten Segment) | **Uhr Route 2** |
+| *(frei)* | **Nächster Schritt Route 1** | **Nächster Schritt Route 2** |
 
-Jede Taste: *Press action* `streamdeck: Send generic command` mit `A:reset`, `A:toggle`, `A:skip` (bzw. `B:…`),
-*Feedback* `streamdeck: Update variable with value from WebSocket message` mit JSON-Pfad `A.reset` usw. und
-Variable `a_reset` usw.; Tastentext `$(streamdeck:a_reset)` usw.
-Die Beschriftung entspricht den Buttons auf der Website (Modus „Optimiert Lead“ oder normal). Ist ein Button auf der
-Website gesperrt, zeigt die Taste stattdessen den Status (z. B. „wartet auf Start“) und tut nichts.
-Ohne verbundene Website zeigen alle Tasten „offline“.
+Die Schritt-Taste zeigt immer nur die eine sinnvolle Aktion (nur mit „Optimiert Lead“ AN):
+**Start** (bereit) → **Klettern** (Vorbereitung läuft / wartet) → **Pause/Fall** (Kletterzeit läuft) → **Reset** (gestoppt oder Rundenende) → …
+Farben: Start/Klettern grün, Pause/Fall orange, Reset rot, ohne Website grau.
+
+Companion-Konfiguration: Variablen-Feedbacks (`streamdeck: Update variable…`) mit den JSON-Pfaden
+`1.uhr`, `1.uhrfarbe`, `1.aktion`, `1.aktionfarbe` (bzw. `2.…`) → Variablen `r1_uhr`, `r1_farbe`, `r1_aktion`, `r1_akfarbe`;
+Farben über `internal: Variable: Check value`. Befehle: `1:next`, `2:next`, `beide:reset` (als „Release after 1000ms“-Aktion).
 
 ## Protokoll
 
-- Website → Relais: `{"type":"state","data":{"A":{"reset":"A\nReset","toggle":"A\nStart","skip":"A\nKlettern"},"B":{…}}}`
+- Website → Relais: `{"type":"state","data":{"1":{"uhr":"Route 1\n05:32","uhrfarbe":"gruen","aktion":"Pause/\nFall","aktionfarbe":"pause"},"2":{…}}}`
 - Relais → Companion: das `data`-Objekt (plus `"online":"ja"`)
-- Companion → Relais → Website: Text `A:reset` | `A:toggle` | `A:skip` | `B:…` | `beide:…`
+- Companion → Relais → Website: Text `1:next` | `2:next` | `beide:reset` (außerdem `A/B:reset|toggle|skip`)
 
 ## Kosten (Cloudflare Workers Free)
 
