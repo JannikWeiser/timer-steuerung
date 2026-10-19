@@ -7,16 +7,14 @@
 //   wss://timer-bridge.weiser-jannik.workers.dev/r/<KOPPELCODE>?role=web
 //   wss://timer-bridge.weiser-jannik.workers.dev/r/<KOPPELCODE>?role=companion
 //
-// Website → Companion: Zustand als JSON, z. B. {"online":"ja","A":{"reset":"Reset","toggle":"Start","skip":"Klettern ▶"},"B":{…}}
-// Companion → Website: Befehl als Text, z. B. "A:reset", "B:toggle", "beide:skip"
+// Website → Companion: Zustand als JSON, z. B.
+//   {"online":"ja","1":{"uhr":"Route 1\n05:32","uhrfarbe":"gruen","aktion":"Route 1\nPause/Fall","aktionfarbe":"pause"},"2":{…}}
+// Companion → Website: Befehl als Text, z. B. "1:next", "2:next", "beide:reset"
 
 const CODE = /^[A-Za-z0-9]{12,64}$/;
-const COMMAND = /^(A|B|beide):(reset|toggle|skip)$/i;
-const OFFLINE = JSON.stringify({
-  online: "nein",
-  A: { reset: "A\noffline", toggle: "A\noffline", skip: "A\noffline" },
-  B: { reset: "B\noffline", toggle: "B\noffline", skip: "B\noffline" },
-});
+const COMMAND = /^(A|B|1|2|beide):(next|reset|toggle|skip)$/i;
+const offlineRoute = n => ({ uhr: `Route ${n}\noffline`, uhrfarbe: "aus", aktion: "Website\noffline", aktionfarbe: "aus" });
+const OFFLINE = JSON.stringify({ online: "nein", 1: offlineRoute(1), 2: offlineRoute(2) });
 
 export class Room {
   constructor(ctx) {

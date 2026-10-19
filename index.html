@@ -149,7 +149,7 @@
     <span class="sd-dot" id="sd-dot"></span>Stream Deck
   </button>
   <span class="row-break"></span>
-  <button class="primary" id="all-restart"><span class="long">Beide neu starten</span><span class="short">Neustart</span></button>
+  <button class="primary" id="all-restart"><span class="long">Beide Routen neu starten</span><span class="short">Neustart</span></button>
   <button class="warn" id="all-pause"><span class="long">Beide pausieren</span><span class="short">Pause</span></button>
   <button class="ok" id="all-resume"><span class="long">Beide fortsetzen</span><span class="short">Weiter</span></button>
 </header>
@@ -174,7 +174,7 @@
       <button class="ghost" id="sd-copy" type="button">Adresse kopieren</button>
       <button class="ghost" id="sd-newcode" type="button">Neuen Code erzeugen</button>
     </div>
-    <p>Tastenbelegung (Stream Deck Mini, 6 Tasten) – Beschriftung wie die Buttons hier:</p>
+    <p>Tastenbelegung (Stream Deck Mini): oben die Uhren, darunter je Route der nächste Schritt.</p>
     <div class="sd-grid" id="sd-preview"></div>
   </div>
   <div class="sd-row" style="justify-content:flex-end"><button class="primary" id="sd-close" type="button">Schließen</button></div>
@@ -277,9 +277,10 @@ let leadMode = store.get("leadMode") ?? ["A", "B"].some(s => store.get("slot:" +
 class TimerPanel {
   constructor(slot) {
     this.slot = slot;
+    this.route = slot === "A" ? 1 : 2;   // intern A/B (gespeicherte Anmeldung), angezeigt als Route 1/2
     this.el = document.getElementById("panel-tpl").content.firstElementChild.cloneNode(true);
     this.$ = sel => this.el.querySelector(sel);
-    this.$(".badge").innerHTML = `<span class="long">Timer </span>${slot}`;
+    this.$(".badge").innerHTML = `<span class="long">Route </span>${this.route}`;
     this.timer = null;
     this.busy = false;
     this.ws = null;
@@ -290,7 +291,7 @@ class TimerPanel {
     this.$(".logout").addEventListener("click", () => this.logout());
     this.$(".restart").addEventListener("click", () => {
       const running = this.timer && !isFrozen(this.timer, this.now());
-      if (running && !confirm(`Timer ${this.slot} („${this.timer.id}“) wirklich ${this.leadMode ? "zurücksetzen" : "neu starten"}?`)) return;
+      if (running && !confirm(`Route ${this.route} („${this.timer.id}“) wirklich ${this.leadMode ? "zurücksetzen" : "neu starten"}?`)) return;
       this.restart();
     });
     this.$(".toggle").addEventListener("click", () => this.timer && isFrozen(this.timer, this.now()) ? this.resume() : this.pause());
@@ -532,7 +533,7 @@ const panels = ["A", "B"].map(s => new TimerPanel(s));
 panels.forEach(p => document.getElementById("panels").appendChild(p.el));
 
 document.getElementById("all-restart").onclick = () => {
-  if (confirm(`Beide Timer ${leadMode ? "zurücksetzen" : "neu starten"}?`)) panels.forEach(p => p.restart());
+  if (confirm(`Beide Routen ${leadMode ? "zurücksetzen" : "neu starten"}?`)) panels.forEach(p => p.restart());
 };
 const leadSwitch = document.getElementById("lead-switch");
 leadSwitch.onclick = () => { leadMode = !leadMode; store.set("leadMode", leadMode); renderHeader(); panels.forEach(p => p.render()); };
@@ -540,7 +541,7 @@ function renderHeader() {
   leadSwitch.setAttribute("aria-checked", String(leadMode));
   leadSwitch.querySelector(".switch-state").textContent = leadMode ? "AN" : "AUS";
   const btn = document.getElementById("all-restart");
-  btn.querySelector(".long").textContent = leadMode ? "Beide zurücksetzen" : "Beide neu starten";
+  btn.querySelector(".long").textContent = leadMode ? "Beide Routen zurücksetzen" : "Beide Routen neu starten";
   btn.querySelector(".short").textContent = leadMode ? "Reset" : "Neustart";
 }
 renderHeader();
@@ -600,30 +601,57 @@ const streamDeck = {
     if (status) this.status = status;
   },
 
-  // Befehl vom Stream Deck ausführen – nur was auf der Seite gerade auch klickbar ist
+  // Stream Deck: pro Route nur der eine sinnvolle nächste Schritt im Lead-Ablauf
+  //   bereit → Start · Vorbereitung/wartet → Klettern · Klettern → Pause/Fall · gestoppt/Ende → Reset
+  nextStep(p) {
+    if (!p.token || !p.timer) return { label: "nicht\nverbunden", key: "aus" };
+    if (!leadMode) return { label: "Lead\naus", key: "aus" };
+    const t = p.timer, now = p.now(), phase = p.leadPhase(t, now);
+    const toClimb = { label: "Klettern", key: "klettern", run: () => p.skip() };
+    const reset = { label: "Reset", key: "reset", run: () => p.restart() };
+    if (phase === "ready") return { label: "Start", key: "start", run: () => p.resume() };
+    if (phase === "prep" || phase === "prepDone") return toClimb;
+    if (phase === "climb") return { label: "Pause/\nFall", key: "pause", run: () => p.pause() };
+    if (phase === "paused") return leadElapsed(t, now) < t.segments[0].time ? toClimb : reset;
+    return reset;                                              // Rundenende
+  },
+
+  // Befehl vom Stream Deck ausführen (ohne Rückfragen – am Stream Deck gibt es kein Dialogfenster)
   run(cmd) {
-    const [target, a = ""] = cmd.split(":"), action = a.toLowerCase();
-    const list = target.toLowerCase() === "beide" ? panels : panels.filter(p => p.slot === target.toUpperCase());
+    const [target, a = ""] = cmd.split(":"), action = a.toLowerCase(), tg = target.toUpperCase();
+    const list = tg === "BEIDE" ? panels : panels.filter(p => p.slot === tg || String(p.route) === tg);
     for (const p of list) {
-      if (!p.token || !p.timer) continue;
-      const btn = p.$({ reset: ".restart", toggle: ".toggle", skip: ".skip" }[action] || ".none");
-      if (!btn || btn.disabled) continue;
-      if (action === "reset") p.restart();                    // ohne Rückfrage – am Stream Deck gibt es kein Dialogfenster
-      else if (action === "toggle") isFrozen(p.timer, p.now()) ? p.resume() : p.pause();
-      else if (action === "skip") p.skip();
+      if (!p.token || !p.timer || p.busy) continue;
+      if (action === "next") this.nextStep(p).run?.();
+      else if (action === "reset") p.restart();
+      else if (action === "toggle" && !p.$(".toggle").disabled) isFrozen(p.timer, p.now()) ? p.resume() : p.pause();
+      else if (action === "skip" && !p.$(".skip").disabled) p.skip();
     }
   },
 
   labels() {
-    const label = (p, sel) => {
-      if (!p.token) return "nicht\nverbunden";
-      const b = p.$(sel), short = b.querySelector(".short");
-      const text = b.disabled && sel !== ".restart" ? p.$(".state").textContent : (short ? short.textContent : b.textContent);
-      return text.replace(/[▶⏭]/g, "").trim();   // Symbole fehlen in der Companion-Schrift
+    const COLOR = hex => {
+      const n = parseInt(String(hex || "").replace("#", ""), 16);
+      if (isNaN(n)) return "neutral";
+      const r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+      if (r > 180 && g < 110) return "rot";
+      if (g > 140 && r < 170 && b < 160) return "gruen";
+      if (r > 200 && g > 140 && b < 100) return "gelb";
+      return "neutral";
     };
+    const SHORT = { ready: "bereit", prepDone: "wartet", paused: "gestoppt", done: "Ende" };
     const data = {};
-    for (const p of panels) data[p.slot] = Object.fromEntries(
-      [["reset", ".restart"], ["toggle", ".toggle"], ["skip", ".skip"]].map(([k, sel]) => [k, `${p.slot}\n${label(p, sel)}`]));
+    for (const p of panels) {
+      const step = this.nextStep(p), t = p.timer;
+      let uhr = `Route ${p.route}\n–`, uhrfarbe = "aus";
+      if (p.token && t?.segments?.length) {
+        const now = p.now(), { inRound } = roundState(t, now), { segment } = segmentAt(inRound, t.segments);
+        const extra = leadMode ? SHORT[p.leadPhase(t, now)] : "";
+        uhr = `Route ${p.route}\n${p.$(".time").textContent}${extra ? "\n" + extra : ""}`;
+        uhrfarbe = COLOR(segment.color);
+      }
+      data[p.route] = { uhr, uhrfarbe, aktion: step.label, aktionfarbe: step.key };
+    }
     return data;
   },
   push() {
@@ -647,7 +675,8 @@ const streamDeck = {
   },
   renderPreview() {
     const d = this.labels();
-    document.getElementById("sd-preview").innerHTML = ["A", "B"].flatMap(s => ["reset", "toggle", "skip"].map(k => d[s][k]))
+    document.getElementById("sd-preview").innerHTML =
+      ["RESET\nbeide (halten)", d[1].uhr, d[2].uhr, "", d[1].aktion, d[2].aktion]
       .map(t => `<span>${t.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</span>`).join("");
   },
 };
