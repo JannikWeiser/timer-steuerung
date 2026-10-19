@@ -1,0 +1,7 @@
+name = "timer-bridge"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+# Secrets (nicht hier eintragen, sondern mit `npx wrangler secret put NAME`):
+#   BRIDGE_KEY, TIMER_A_ID, TIMER_A_PASSWORD, TIMER_B_ID, TIMER_B_PASSWORD

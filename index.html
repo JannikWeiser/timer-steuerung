@@ -413,6 +413,7 @@ class TimerPanel {
       const e = t.stop_at - t.start_at, start_at = now - e;
       if (!this.leadMode) return { start_at, stop_at: undefined };
       if (e >= lead.roundEnd(t)) return null;               // Runde beendet: nur Reset
+      if (e >= lead.prepEnd(t) && e < t.segments[0].time) return null; // wartet auf Start: nur "Klettern ▶" gibt frei
       return { start_at, stop_at: start_at + (e < lead.prepEnd(t) ? lead.prepEnd(t) : lead.roundEnd(t)) };
     });
   }
@@ -435,6 +436,7 @@ class TimerPanel {
 
   leadPhase(t, now) {
     const e = leadElapsed(t, now), frozen = isFrozen(t, now);
+    if (t.stop_at == null) return "climb";               // läuft normal ohne vorgemerkten Halt
     if (frozen && e <= 1) return "ready";
     if (e < t.segments[0].time) return frozen ? (e >= lead.prepEnd(t) ? "prepDone" : "paused") : "prep";
     if (e < lead.roundEnd(t)) return frozen ? "paused" : "climb";
