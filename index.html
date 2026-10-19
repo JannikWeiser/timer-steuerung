@@ -79,6 +79,23 @@
   .hidden { display: none !important; }
   .mobile-only, .short { display: none; }
 
+  /* Stream Deck / Companion */
+  .row-break { display: none; }
+  button.sd-btn { display: inline-flex; align-items: center; gap: 8px; border: 2px solid var(--line); background: var(--panel); white-space: nowrap; }
+  .sd-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+  .sd-dot.on { background: var(--ok); } .sd-dot.half { background: var(--warn); } .sd-dot.err { background: #ff6b81; }
+  dialog.sd { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px;
+              padding: 18px; width: min(560px, calc(100vw - 32px)); }
+  dialog.sd::backdrop { background: rgba(0,0,0,.6); }
+  dialog.sd h3 { margin: 0 0 10px; font-size: 17px; }
+  dialog.sd p { margin: 8px 0; color: var(--muted); font-size: 14px; }
+  .sd-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+  .sd-url { flex: 1 1 100%; font: 12.5px/1.4 ui-monospace, Menlo, monospace; background: var(--panel-2); border-radius: 8px;
+            padding: 8px 10px; word-break: break-all; user-select: all; }
+  .sd-status { font-weight: 600; }
+  .sd-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 6px; max-width: 300px; }
+  .sd-grid span { background: var(--panel-2); border-radius: 6px; padding: 6px 4px; font-size: 11.5px; text-align: center; white-space: pre-line; }
+
   /* Handy: beide Timer ohne Scrollen, Vorschau durch kompakte Farbkachel ersetzt */
   @media (max-width: 700px), (max-height: 560px) and (max-width: 1000px) {
     .mobile-only { display: inline-block; }
@@ -90,7 +107,9 @@
     header h1 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 2px 0 0; }
     header { flex-wrap: wrap; }
     header button { flex: 1; padding: 10px 4px; font-size: 14px; }
-    header button.switch { order: -1; flex: 1 0 100%; justify-content: center; padding: 6px 10px; }
+    header button.switch { order: -2; flex: 1 1 auto; justify-content: center; padding: 6px 10px; }
+    header button.sd-btn { order: -1; flex: 0 0 auto; padding: 6px 10px; font-size: 13px; }
+    header .row-break { display: block; order: -1; flex-basis: 100%; height: 0; }
     main { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr); grid-template-rows: repeat(2, minmax(0, 1fr));
            gap: 8px; padding: 8px 10px; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
     .panel { padding: 8px; gap: 6px; min-height: 0; border-radius: 10px; }
@@ -126,11 +145,40 @@
     <span class="switch-label">Optimiert Lead</span>
     <span class="switch-state">AUS</span>
   </button>
+  <button class="sd-btn" id="sd-open" type="button" title="Stream Deck über Bitfocus Companion koppeln">
+    <span class="sd-dot" id="sd-dot"></span>Stream Deck
+  </button>
+  <span class="row-break"></span>
   <button class="primary" id="all-restart"><span class="long">Beide neu starten</span><span class="short">Neustart</span></button>
   <button class="warn" id="all-pause"><span class="long">Beide pausieren</span><span class="short">Pause</span></button>
   <button class="ok" id="all-resume"><span class="long">Beide fortsetzen</span><span class="short">Weiter</span></button>
 </header>
 <main id="panels"></main>
+
+<dialog class="sd" id="sd-dialog">
+  <h3>Stream Deck (Bitfocus Companion)</h3>
+  <p>Companion steuert die Timer über diese Seite – mit der Anmeldung, die hier schon besteht.
+     Diese Seite muss dafür geöffnet bleiben (am besten auf dem Laptop mit Companion).</p>
+  <div class="sd-row">
+    <button class="switch" id="sd-switch" type="button" role="switch" aria-checked="false">
+      <span class="track"><span class="knob"></span></span>
+      <span class="switch-label">Stream Deck koppeln</span>
+      <span class="switch-state">AUS</span>
+    </button>
+    <span class="sd-status" id="sd-status">aus</span>
+  </div>
+  <div id="sd-details" class="hidden">
+    <p>In Companion: <b>Connections → „Generic: WebSocket“ → Target URL</b> diese Adresse einfügen:</p>
+    <div class="sd-row">
+      <code class="sd-url" id="sd-url"></code>
+      <button class="ghost" id="sd-copy" type="button">Adresse kopieren</button>
+      <button class="ghost" id="sd-newcode" type="button">Neuen Code erzeugen</button>
+    </div>
+    <p>Tastenbelegung (Stream Deck Mini, 6 Tasten) – Beschriftung wie die Buttons hier:</p>
+    <div class="sd-grid" id="sd-preview"></div>
+  </div>
+  <div class="sd-row" style="justify-content:flex-end"><button class="primary" id="sd-close" type="button">Schließen</button></div>
+</dialog>
 
 <template id="panel-tpl">
   <section class="panel">
@@ -499,7 +547,126 @@ renderHeader();
 document.getElementById("all-pause").onclick = () => panels.forEach(p => p.pause());
 document.getElementById("all-resume").onclick = () => panels.forEach(p => p.resume());
 
-setInterval(() => { panels.forEach(p => p.render()); renderHeader(); }, 250);
+// ---------- Stream Deck über Companion (WebSocket-Relais) ----------
+// Companion schickt Befehle wie "A:reset", "B:toggle", "beide:skip" über das Relais hierher;
+// diese Seite führt sie mit ihrer Anmeldung aus und meldet die aktuellen Button-Beschriftungen zurück.
+const RELAY = store.get("relayBase") || "wss://timer-bridge.weiser-jannik.workers.dev/r/";
+const streamDeck = {
+  cfg: { enabled: false, code: "", ...store.get("streamDeck") },
+  ws: null, retry: null, pingTimer: null, lastSent: "", companions: 0, status: "aus", replaced: false,
+
+  save() { store.set("streamDeck", this.cfg); },
+  newCode() {
+    const abc = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789", r = crypto.getRandomValues(new Uint8Array(20));
+    this.cfg.code = [...r].map(b => abc[b % abc.length]).join(""); this.save();
+  },
+  companionUrl() { return `${RELAY}${this.cfg.code}?role=companion`; },
+
+  setEnabled(on) {
+    this.cfg.enabled = on;
+    if (on && !this.cfg.code) this.newCode();
+    this.save(); this.replaced = false;
+    on ? this.connect() : this.disconnect("aus");
+    this.renderUi();
+  },
+  connect() {
+    this.disconnect();
+    if (!this.cfg.enabled || !this.cfg.code) return;
+    this.status = "verbinde …"; this.renderUi();
+    const ws = this.ws = new WebSocket(`${RELAY}${this.cfg.code}?role=web`);
+    ws.onopen = () => {
+      this.status = "verbunden"; this.lastSent = ""; this.push();
+      this.pingTimer = setInterval(() => ws.readyState === 1 && ws.send("ping"), 25000);
+      this.renderUi();
+    };
+    ws.onmessage = e => {
+      if (e.data === "pong") return;
+      let m; try { m = JSON.parse(e.data); } catch { return; }
+      if (m.type === "cmd") this.run(m.cmd);
+      if (m.type === "peers") { this.companions = m.companions; this.renderUi(); }
+      if (m.type === "replaced") { this.replaced = true; }
+    };
+    ws.onclose = () => {
+      if (this.ws !== ws) return;
+      this.disconnect(this.replaced ? "von anderem Gerät übernommen" : "getrennt – verbinde neu …");
+      if (!this.replaced) this.retry = setTimeout(() => this.connect(), 3000);   // nicht zurückübernehmen
+      this.renderUi();
+    };
+  },
+  disconnect(status) {
+    clearTimeout(this.retry); clearInterval(this.pingTimer);
+    const ws = this.ws; this.ws = null; ws?.close();
+    this.companions = 0;
+    if (status) this.status = status;
+  },
+
+  // Befehl vom Stream Deck ausführen – nur was auf der Seite gerade auch klickbar ist
+  run(cmd) {
+    const [target, a = ""] = cmd.split(":"), action = a.toLowerCase();
+    const list = target.toLowerCase() === "beide" ? panels : panels.filter(p => p.slot === target.toUpperCase());
+    for (const p of list) {
+      if (!p.token || !p.timer) continue;
+      const btn = p.$({ reset: ".restart", toggle: ".toggle", skip: ".skip" }[action] || ".none");
+      if (!btn || btn.disabled) continue;
+      if (action === "reset") p.restart();                    // ohne Rückfrage – am Stream Deck gibt es kein Dialogfenster
+      else if (action === "toggle") isFrozen(p.timer, p.now()) ? p.resume() : p.pause();
+      else if (action === "skip") p.skip();
+    }
+  },
+
+  labels() {
+    const label = (p, sel) => {
+      if (!p.token) return "nicht\nverbunden";
+      const b = p.$(sel), short = b.querySelector(".short");
+      const text = b.disabled && sel !== ".restart" ? p.$(".state").textContent : (short ? short.textContent : b.textContent);
+      return text.replace(/[▶⏭]/g, "").trim();   // Symbole fehlen in der Companion-Schrift
+    };
+    const data = {};
+    for (const p of panels) data[p.slot] = Object.fromEntries(
+      [["reset", ".restart"], ["toggle", ".toggle"], ["skip", ".skip"]].map(([k, sel]) => [k, `${p.slot}\n${label(p, sel)}`]));
+    return data;
+  },
+  push() {
+    if (!this.ws || this.ws.readyState !== 1) return;
+    const json = JSON.stringify({ type: "state", data: this.labels() });
+    if (json !== this.lastSent) { this.ws.send(json); this.lastSent = json; }
+  },
+
+  renderUi() {
+    const on = this.cfg.enabled, dot = document.getElementById("sd-dot");
+    const connected = this.ws?.readyState === 1;
+    dot.className = "sd-dot" + (!on ? "" : this.replaced ? " err" : connected && this.companions ? " on" : " half");
+    const sw = document.getElementById("sd-switch");
+    sw.setAttribute("aria-checked", String(on));
+    sw.querySelector(".switch-state").textContent = on ? "AN" : "AUS";
+    document.getElementById("sd-status").textContent = !on ? "aus"
+      : connected ? (this.companions ? `verbunden · Companion verbunden (${this.companions})` : "verbunden · warte auf Companion") : this.status;
+    document.getElementById("sd-details").classList.toggle("hidden", !on);
+    document.getElementById("sd-url").textContent = on ? this.companionUrl() : "";
+    if (this.replaced && on) document.getElementById("sd-status").textContent = "von anderem Gerät übernommen – zum Zurückholen aus- und einschalten";
+  },
+  renderPreview() {
+    const d = this.labels();
+    document.getElementById("sd-preview").innerHTML = ["A", "B"].flatMap(s => ["reset", "toggle", "skip"].map(k => d[s][k]))
+      .map(t => `<span>${t.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</span>`).join("");
+  },
+};
+document.getElementById("sd-open").onclick = () => { streamDeck.renderUi(); streamDeck.renderPreview(); document.getElementById("sd-dialog").showModal(); };
+document.getElementById("sd-close").onclick = () => document.getElementById("sd-dialog").close();
+document.getElementById("sd-switch").onclick = () => streamDeck.setEnabled(!streamDeck.cfg.enabled);
+document.getElementById("sd-copy").onclick = () => navigator.clipboard?.writeText(streamDeck.companionUrl())
+  .then(() => { document.getElementById("sd-copy").textContent = "Kopiert ✓"; setTimeout(() => document.getElementById("sd-copy").textContent = "Adresse kopieren", 2000); });
+document.getElementById("sd-newcode").onclick = () => {
+  if (!confirm("Neuen Code erzeugen? Danach muss die Adresse in Companion ersetzt werden.")) return;
+  streamDeck.newCode(); streamDeck.connect(); streamDeck.renderUi();
+};
+streamDeck.renderUi();
+if (streamDeck.cfg.enabled) streamDeck.connect();
+
+setInterval(() => {
+  panels.forEach(p => p.render()); renderHeader(); streamDeck.push();
+  if (document.getElementById("sd-dialog").open) streamDeck.renderPreview();
+}, 250);
 </script>
 </body>
 </html>

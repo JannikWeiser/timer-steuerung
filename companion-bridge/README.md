@@ -1,59 +1,52 @@
-# Timer-Bridge für Companion / Stream Deck
+# Stream-Deck-Relais (Companion ↔ timer.comptools.cloud)
 
-Cloudflare Worker, der die zwei Timer auf timer.itsblue.de per einfacher HTTP-Adresse steuerbar macht –
-mit derselben Logik wie die Steuerseite im Modus **„Optimiert Lead“**.
+Cloudflare Worker mit Durable Object, der Nachrichten zwischen der geöffneten Steuerseite
+**timer.comptools.cloud** und **Bitfocus Companion** durchreicht. Die Timer steuert ausschließlich
+die Website mit ihrer eigenen Anmeldung – im Relais liegen **keine Zugangsdaten**.
 
-Adresse: `https://timer-bridge.weiser-jannik.workers.dev/<SCHLÜSSEL>/…`
-Der Schlüssel steht nicht in diesem (öffentlichen) Repo, sondern nur als Secret bei Cloudflare.
+```
+Stream Deck → Companion ──WebSocket──► Relais ──WebSocket──► Website (im Browser offen) ──► ITsBlue
+             Beschriftungen ◄──────────────────────────────────┘
+```
 
-## Befehle
+## Koppeln
 
-`<timer>` ist `A`, `B` oder `beide`.
+1. Auf timer.comptools.cloud oben **„Stream Deck“** → Schalter **„Stream Deck koppeln“** einschalten.
+   Die Seite erzeugt einen Koppelcode und zeigt die Companion-Adresse an (**„Adresse kopieren“**).
+2. In Companion: **Connections → „streamdeck“ (Generic: WebSocket) → Target URL** = kopierte Adresse
+   (`wss://timer-bridge.weiser-jannik.workers.dev/r/<KOPPELCODE>?role=companion`), *Reconnect* an, *Append new line* aus.
+3. Die Website muss geöffnet bleiben. Es steuert immer nur eine Website; ein zweites Gerät mit demselben Code übernimmt.
 
-| Adresse | Wirkung |
-|---|---|
-| `<timer>/weiter` | Nächster Schritt im Lead-Ablauf: bereit → Start, wartet → Klettern, pausiert → Fortsetzen, beendet → Reset. Läuft die Uhr, passiert nichts. |
-| `<timer>/reset` | Zurück auf Anfang, Uhr steht |
-| `<timer>/start` | Vorbereitung starten (hält danach automatisch an) |
-| `<timer>/klettern` | Kletterzeit starten (auch direkt aus Reset) |
-| `<timer>/startpause` | Start/Fortsetzen bzw. Pause im Wechsel |
-| `<timer>/pause`, `<timer>/fortsetzen` | Pause / Fortsetzen einzeln |
-| `<timer>/segment` | Beim Klettern: weiter zu Rot bzw. ans Ende |
-| `<timer>/neustart` | Normaler ITsBlue-Neustart ohne Haltepunkte |
-| `A/status`, `B/status` | JSON mit Phase, Zeit, Segment, Farbe |
-| `A/zeit`, `A/phase` | Nur Zeit bzw. Phase als Text |
-| `A/taste.png`, `B/taste.png` | Live-Bild für eine Stream-Deck-Taste |
+„Neuen Code erzeugen“ macht den alten Code ungültig (Adresse in Companion danach ersetzen).
 
-## Einrichtung in Companion
-
-1. **Connections → Add connection → „Generic: HTTP Requests“**
-   - Base URL: `https://timer-bridge.weiser-jannik.workers.dev/<SCHLÜSSEL>/`
-2. **Steuertaste** (z. B. „A Reset“): Taste anlegen → *Press actions* → `http: GET` → URI `A/reset`.
-   Für alle weiteren Tasten genauso, nur mit anderer URI (siehe Tabelle).
-3. **Live-Taste** (zeigt Farbe, Phase und Restzeit): Taste anlegen, Text leer lassen →
-   *Feedbacks* → `http: Image from URL` → URI `A/taste.png`, **Poll Interval 1000** (ms).
-   Tipp: Live-Taste und Start/Pause zusammenlegen – die Live-Taste bekommt zusätzlich die Press action `A/startpause`.
-
-### Eingerichtet: Stream Deck Mini, Companion-Seite 3
+## Tasten (Stream Deck Mini, Companion-Seite 3)
 
 | | | |
 |---|---|---|
-| UP (Navigation) | **A live** – Bild `A/taste.png`, Druck `A/weiter` | **B live** – Bild `B/taste.png`, Druck `B/weiter` |
-| **PAUSE BEIDE** – `beide/pause` | **RESET A** – `A/reset` | **RESET B** – `B/reset` |
+| **A Reset** (rot) | **A Start/Pause/Fortsetzen** (gelb) | **A Klettern/Segment** (grün) |
+| **B Reset** (rot) | **B Start/Pause/Fortsetzen** (gelb) | **B Klettern/Segment** (grün) |
 
-Die Live-Tasten zeigen oben Timer und Phase, in der Mitte die Zeit und unten, was der nächste Druck macht
-(„> START“, „> KLETTERN“, „> WEITER“, „> RESET“). Nach einer Pause geht es mit der Live-Taste weiter.
+Jede Taste: *Press action* `streamdeck: Send generic command` mit `A:reset`, `A:toggle`, `A:skip` (bzw. `B:…`),
+*Feedback* `streamdeck: Update variable with value from WebSocket message` mit JSON-Pfad `A.reset` usw. und
+Variable `a_reset` usw.; Tastentext `$(streamdeck:a_reset)` usw.
+Die Beschriftung entspricht den Buttons auf der Website (Modus „Optimiert Lead“ oder normal). Ist ein Button auf der
+Website gesperrt, zeigt die Taste stattdessen den Status (z. B. „wartet auf Start“) und tut nichts.
+Ohne verbundene Website zeigen alle Tasten „offline“.
 
-## Kosten / Grenzen (Cloudflare Workers Free)
+## Protokoll
 
-- 100.000 Anfragen pro Tag (Neustart der Zählung um 00:00 UTC), keine Kosten ohne hinterlegte Zahlungsdaten.
-- Jede Live-Taste mit 1 s Poll-Intervall = 3.600 Anfragen pro Stunde. Zwei Live-Tasten reichen für ca. 13 Stunden am Tag;
-  mit 2000 ms Intervall für den ganzen Tag. Companion nicht tagelang mit Live-Tasten laufen lassen.
+- Website → Relais: `{"type":"state","data":{"A":{"reset":"A\nReset","toggle":"A\nStart","skip":"A\nKlettern"},"B":{…}}}`
+- Relais → Companion: das `data`-Objekt (plus `"online":"ja"`)
+- Companion → Relais → Website: Text `A:reset` | `A:toggle` | `A:skip` | `B:…` | `beide:…`
+
+## Kosten (Cloudflare Workers Free)
+
+Die Website sendet nur bei Änderungen der Beschriftung; Pings werden ohne Aufwecken beantwortet.
+Ein Wettkampftag bleibt weit unter den kostenlosen Grenzen.
 
 ## Pflege
 
 ```bash
-npx wrangler@4 deploy                         # Code-Änderungen hochladen
-npx wrangler@4 secret put TIMER_A_ID          # Timer wechseln (ebenso TIMER_A_PASSWORD, TIMER_B_…)
-npx wrangler@4 secret put BRIDGE_KEY          # Schlüssel ändern (dann auch in Companion anpassen)
+npx wrangler@4 deploy        # Änderungen hochladen
+npx wrangler@4 tail          # Live-Protokoll
 ```
