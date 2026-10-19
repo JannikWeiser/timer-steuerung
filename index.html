@@ -21,13 +21,18 @@
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
            padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   .panel-head { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
-  .badge { font-size: 12px; font-weight: 700; background: var(--panel-2); color: var(--muted);
+  .badge { white-space: nowrap; font-size: 12px; font-weight: 700; background: var(--panel-2); color: var(--muted);
            border-radius: 6px; padding: 2px 8px; }
   .panel-head h2 { margin: 0; font-size: 18px; flex: 1 1 8ch; min-width: 8ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .live { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
   .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
   .live.on { color: var(--ok); }
   .live.on::before { background: var(--ok); }
+  button.lead-switch { font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 999px;
+                       background: transparent; color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
+  button.lead-switch::before { content: "○ "; }
+  button.lead-switch.on { background: var(--ok); color: #0b1a11; border-color: var(--ok); }
+  button.lead-switch.on::before { content: "● "; }
 
   form.login { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
   @media (max-width: 520px) { form.login { grid-template-columns: 1fr; } }
@@ -83,6 +88,7 @@
     .panel-head h2 { font-size: 15px; flex: 1 1 auto; min-width: 0; }
     .badge { font-size: 11px; padding: 2px 6px; }
     .live { font-size: 0; gap: 0; }
+    button.lead-switch { font-size: 11px; padding: 3px 7px; }
     button.ghost { padding: 4px 6px; font-size: 12px; }
     form.login { grid-template-columns: 1fr 1fr; }
     form.login button { grid-column: 1 / -1; }
@@ -118,8 +124,9 @@
       <h2>Nicht verbunden</h2>
       <span class="live hidden"></span>
       <span class="head-state mobile-only"></span>
+      <button class="lead-switch hidden" type="button" title="Nach der Vorbereitung anhalten, Reset ohne automatischen Start, am Rundenende auf 00:00 stehen bleiben"><span class="long">Optimiert Lead</span><span class="short">Lead</span></button>
       <button class="ghost copy mobile-only hidden" type="button">Link</button>
-      <button class="ghost logout hidden" type="button">Abmelden</button>
+      <button class="ghost logout hidden" type="button" title="Abmelden"><span class="long">Abmelden</span><span class="short">✕</span></button>
     </div>
 
     <form class="login">
@@ -180,6 +187,21 @@ function fmt(ms) {
   return h ? `${p(h)}:${p(m)}:${p(s)}` : `${p(m)}:${p(s)}`;
 }
 
+// Eingefroren = Stoppzeit erreicht. Eine Stoppzeit in der Zukunft ist ein vorgemerkter Halt.
+const isFrozen = (t, now) => t.stop_at != null && t.stop_at <= now;
+const elapsedIn = (t, now) => (isFrozen(t, now) ? t.stop_at : now) - t.start_at;
+const roundTotal = t => t.segments.reduce((s, x) => s + x.time, 0);
+// Position in der Runde; läuft der Timer ohne vorgemerkten Halt endlos, zählt die Position in der aktuellen Runde
+const leadElapsed = (t, now) => (t.stop_at == null ? roundState(t, now).inRound : elapsedIn(t, now));
+
+// "Optimiert Lead": Haltepunkte jeweils 1 ms vor der Segmentgrenze, damit die
+// Displays dort 00:00 im richtigen Segment zeigen (genau auf der Grenze bzw. bei
+// 0 ms Laufzeit stürzt die Anzeige von timer.itsblue.de ab).
+const lead = {
+  prepEnd: t => t.segments[0].time - 1,
+  roundEnd: t => roundTotal(t) - 1,
+};
+
 // --- Speicher (nur in diesem Browser) ---
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
@@ -192,7 +214,7 @@ class TimerPanel {
     this.slot = slot;
     this.el = document.getElementById("panel-tpl").content.firstElementChild.cloneNode(true);
     this.$ = sel => this.el.querySelector(sel);
-    this.$(".badge").textContent = "Timer " + slot;
+    this.$(".badge").innerHTML = `<span class="long">Timer </span>${slot}`;
     this.timer = null;
     this.busy = false;
     this.ws = null;
@@ -202,20 +224,30 @@ class TimerPanel {
     this.$("form.login").addEventListener("submit", e => { e.preventDefault(); this.login(); });
     this.$(".logout").addEventListener("click", () => this.logout());
     this.$(".restart").addEventListener("click", () => {
-      if (this.state() === "running" && !confirm(`Timer ${this.slot} („${this.timer.id}“) wirklich neu starten?`)) return;
+      const running = this.timer && !isFrozen(this.timer, this.now());
+      if (running && !confirm(`Timer ${this.slot} („${this.timer.id}“) wirklich ${this.leadMode ? "zurücksetzen" : "neu starten"}?`)) return;
       this.restart();
     });
-    this.$(".toggle").addEventListener("click", () => this.timer?.stop_at ? this.resume() : this.pause());
+    this.$(".toggle").addEventListener("click", () => this.timer && isFrozen(this.timer, this.now()) ? this.resume() : this.pause());
+    this.$(".lead-switch").addEventListener("click", () => { this.leadMode = !this.leadMode; this.saveSlot({ lead: this.leadMode }); this.render(); });
+    this.skipHtml = this.$(".skip").innerHTML;
     this.$(".skip").addEventListener("click", () => this.skip());
     this.el.querySelectorAll(".copy").forEach(b => b.addEventListener("click", () => {
       navigator.clipboard?.writeText(this.displayUrl()).then(() => this.msg("Display-Link kopiert."));
     }));
 
     const saved = store.get("slot:" + slot);
+    this.leadMode = !!saved?.lead;
     if (saved?.id) {
       this.$("[name=id]").value = saved.id;
       if (saved.token) { this.id = saved.id; this.token = saved.token; this.showConnected(); }
     }
+  }
+
+  saveSlot(patch) {
+    const v = { ...store.get("slot:" + this.slot), ...patch };
+    if (!v.token) delete v.token;
+    store.set("slot:" + this.slot, v);
   }
 
   displayUrl() { return `${SITE}/t/${encodeURIComponent(this.id)}`; }
@@ -236,7 +268,7 @@ class TimerPanel {
         ? "Name oder Passwort falsch." : `Fehler ${r.status}`);
       const data = await r.json();
       this.id = id; this.token = data.token;
-      store.set("slot:" + this.slot, { id, token: data.token });
+      this.saveSlot({ id, token: data.token });
       this.$("[name=password]").value = "";
       this.msg("");
       this.showConnected();
@@ -244,7 +276,7 @@ class TimerPanel {
   }
 
   logout() {
-    store.set("slot:" + this.slot, { id: this.id });
+    this.saveSlot({ id: this.id, token: null });
     this.token = null; this.timer = null;
     this.disconnect();
     this.$(".live").classList.add("hidden");
@@ -252,6 +284,7 @@ class TimerPanel {
     this.$("form.login").classList.remove("hidden");
     this.$(".logout").classList.add("hidden");
     this.$(".panel-head .copy").classList.add("hidden");
+    this.$(".lead-switch").classList.add("hidden");
     this.$("h2").textContent = "Nicht verbunden";
     this.$("iframe").src = "about:blank";
     this.msg("");
@@ -262,6 +295,7 @@ class TimerPanel {
     this.$(".connected").classList.remove("hidden");
     this.$(".logout").classList.remove("hidden");
     this.$(".panel-head .copy").classList.remove("hidden");
+    this.$(".lead-switch").classList.remove("hidden");
     this.$("h2").textContent = this.id;
     this.$("iframe").src = this.displayUrl();
     this.$(".display-url").textContent = this.displayUrl();
@@ -350,16 +384,46 @@ class TimerPanel {
     } finally { this.busy = false; this.render(); }
   }
 
-  // Aktionen wie in der Original-Oberfläche, aber mit Serverzeit statt Mac-Uhr
-  restart() { return this.update(t => ({ start_at: this.now() + (t.metadata?.delay_start_stop || 0), stop_at: undefined })); }
-  pause()   { return this.update(t => t.stop_at ? null : { stop_at: this.now() }); }
-  resume()  { return this.update(t => t.stop_at ? { start_at: this.now() - (t.stop_at - t.start_at), stop_at: undefined } : null); }
+  // Aktionen wie in der Original-Oberfläche, aber mit Serverzeit statt Mac-Uhr.
+  // Im Modus "Optimiert Lead" setzen sie zusätzlich den nächsten Haltepunkt als stop_at.
+  restart() {
+    if (this.leadMode) return this.update(() => { const now = this.now(); return { start_at: now - 1, stop_at: now }; }); // sofort eingefroren, 1 ms nach Start
+    return this.update(t => ({ start_at: this.now() + (t.metadata?.delay_start_stop || 0), stop_at: undefined }));
+  }
+  pause() { return this.update(t => isFrozen(t, this.now()) ? null : { stop_at: this.now() }); }
+  resume() {
+    return this.update(t => {
+      const now = this.now();
+      if (!isFrozen(t, now)) return null;
+      const e = t.stop_at - t.start_at, start_at = now - e;
+      if (!this.leadMode) return { start_at, stop_at: undefined };
+      if (e >= lead.roundEnd(t)) return null;               // Runde beendet: nur Reset
+      return { start_at, stop_at: start_at + (e < lead.prepEnd(t) ? lead.prepEnd(t) : lead.roundEnd(t)) };
+    });
+  }
   skip() {
     return this.update(t => {
-      const { inRound, state } = roundState(t, this.now());
+      const now = this.now();
+      if (this.leadMode) {
+        const e = leadElapsed(t, now);
+        if (e >= t.segments[0].time && isFrozen(t, now)) return null;   // pausiert beim Klettern
+        let b = 0;                                                      // nächste Segmentgrenze
+        for (const seg of t.segments) { b += seg.time; if (b > e) break; }
+        if (b >= roundTotal(t)) return { start_at: now - lead.roundEnd(t), stop_at: now }; // ans Rundenende
+        return { start_at: now - b, stop_at: now - b + lead.roundEnd(t) };
+      }
+      const { inRound, state } = roundState(t, now);
       if (state !== "running") return null;
       return { start_at: t.start_at - segmentAt(inRound, t.segments).remaining, stop_at: undefined };
     });
+  }
+
+  leadPhase(t, now) {
+    const e = leadElapsed(t, now), frozen = isFrozen(t, now);
+    if (frozen && e <= 1) return "ready";
+    if (e < t.segments[0].time) return frozen ? (e >= lead.prepEnd(t) ? "prepDone" : "paused") : "prep";
+    if (e < lead.roundEnd(t)) return frozen ? "paused" : "climb";
+    return "done";
   }
 
   render() {
@@ -370,13 +434,33 @@ class TimerPanel {
     this.$(".dot").style.background = segment.color;
     this.$(".label").textContent = segment.label;
     this.$(".time").textContent = fmt(remaining + (segment.count_to || 0));
-    this.$(".state").textContent = { running: "läuft", stopped: "pausiert", waiting: "wartet", finished: "beendet" }[state];
+    const now = this.now(), frozen = isFrozen(t, now);
+    const toggle = this.$(".toggle"), skip = this.$(".skip"), restart = this.$(".restart");
+    this.$(".lead-switch").classList.toggle("on", this.leadMode);
+    if (this.leadMode) {
+      const phase = this.leadPhase(t, now);
+      this.$(".state").textContent = { ready: "bereit", prep: "Vorbereitung", prepDone: "wartet auf Start",
+        paused: "pausiert", climb: "läuft", done: "beendet" }[phase];
+      restart.textContent = "Reset";
+      toggle.textContent = phase === "ready" ? "Start" : frozen ? "Fortsetzen" : "Pause";
+      toggle.className = frozen ? "ok toggle" : "warn toggle";
+      toggle.disabled = this.busy || phase === "prepDone" || phase === "done";
+      const toClimb = phase === "ready" || phase === "prep" || phase === "prepDone" || (phase === "paused" && leadElapsed(t, now) < t.segments[0].time);
+      skip.textContent = toClimb ? "Klettern ▶" : "Segment ⏭";
+      skip.className = toClimb ? "ok skip" : "skip";
+      skip.disabled = this.busy || !(toClimb || phase === "climb");
+    } else {
+      this.$(".state").textContent = { running: "läuft", stopped: "pausiert", waiting: "wartet", finished: "beendet" }[state];
+      restart.textContent = "Neustart";
+      toggle.textContent = frozen ? "Fortsetzen" : "Pause";
+      toggle.className = frozen ? "ok toggle" : "warn toggle";
+      toggle.disabled = this.busy;
+      if (skip.innerHTML !== this.skipHtml) skip.innerHTML = this.skipHtml;
+      skip.className = "skip";
+      skip.disabled = state !== "running" || this.busy;
+    }
     this.$(".head-state").textContent = this.$(".state").textContent;
-    const toggle = this.$(".toggle");
-    toggle.textContent = t.stop_at ? "Fortsetzen" : "Pause";
-    toggle.className = t.stop_at ? "ok toggle" : "warn toggle";
-    this.$(".skip").disabled = state !== "running" || this.busy;
-    toggle.disabled = this.$(".restart").disabled = this.busy;
+    restart.disabled = this.busy;
   }
 }
 
@@ -384,12 +468,18 @@ const panels = ["A", "B"].map(s => new TimerPanel(s));
 panels.forEach(p => document.getElementById("panels").appendChild(p.el));
 
 document.getElementById("all-restart").onclick = () => {
-  if (confirm("Beide Timer neu starten?")) panels.forEach(p => p.restart());
+  if (confirm(`Beide Timer ${allLead() ? "zurücksetzen" : "neu starten"}?`)) panels.forEach(p => p.restart());
 };
+const allLead = () => panels.filter(p => p.token).every(p => p.leadMode) && panels.some(p => p.token);
+function renderHeader() {
+  const l = allLead(), btn = document.getElementById("all-restart");
+  btn.querySelector(".long").textContent = l ? "Beide zurücksetzen" : "Beide neu starten";
+  btn.querySelector(".short").textContent = l ? "Reset" : "Neustart";
+}
 document.getElementById("all-pause").onclick = () => panels.forEach(p => p.pause());
 document.getElementById("all-resume").onclick = () => panels.forEach(p => p.resume());
 
-setInterval(() => panels.forEach(p => p.render()), 250);
+setInterval(() => { panels.forEach(p => p.render()); renderHeader(); }, 250);
 </script>
 </body>
 </html>
