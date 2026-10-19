@@ -87,15 +87,11 @@
     form.login { grid-template-columns: 1fr 1fr; }
     form.login button { grid-column: 1 / -1; }
     input { font-size: 16px; } /* verhindert Auto-Zoom auf iOS */
-    .status { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr;
-              align-items: center; gap: 0 8px; padding: 6px 10px; background: var(--seg, var(--panel-2));
-              color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.55); }
-    .status .dot { display: none; }
-    .status .label { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .status .state { grid-column: 2; grid-row: 1; margin: 0; color: inherit; font-size: 11px; font-weight: 700;
-                     background: rgba(0,0,0,.35); border-radius: 4px; padding: 1px 6px; text-shadow: none; }
-    .status .time { grid-column: 1 / -1; grid-row: 2; text-align: center; line-height: 1;
-                    font-size: clamp(30px, 9vh, 72px); }
+    .preview { flex: 1; min-height: 0; aspect-ratio: auto; }
+    .status { display: none; }
+    .head-state:empty { display: none; }
+    .head-state { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+                  color: var(--muted); background: var(--panel-2); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
     .controls { gap: 6px; }
     .controls button { padding: 12px 4px; font-size: 15px; }
     .msg { font-size: 12px; min-height: 0; line-height: 1.2; }
@@ -121,6 +117,7 @@
       <span class="badge"></span>
       <h2>Nicht verbunden</h2>
       <span class="live hidden"></span>
+      <span class="head-state mobile-only"></span>
       <button class="ghost copy mobile-only hidden" type="button">Link</button>
       <button class="ghost logout hidden" type="button">Abmelden</button>
     </div>
@@ -132,7 +129,7 @@
     </form>
 
     <div class="connected hidden" style="display:contents">
-      <div class="preview desktop-only"><iframe title="Timer-Vorschau" allow="autoplay"></iframe></div>
+      <div class="preview"><iframe title="Timer-Vorschau" allow="autoplay"></iframe></div>
       <div class="status">
         <span class="dot"></span>
         <span class="label"></span>
@@ -371,10 +368,10 @@ class TimerPanel {
     const { inRound, state } = roundState(t, this.now());
     const { segment, remaining } = segmentAt(inRound, t.segments);
     this.$(".dot").style.background = segment.color;
-    this.$(".status").style.setProperty("--seg", segment.color);
     this.$(".label").textContent = segment.label;
     this.$(".time").textContent = fmt(remaining + (segment.count_to || 0));
     this.$(".state").textContent = { running: "läuft", stopped: "pausiert", waiting: "wartet", finished: "beendet" }[state];
+    this.$(".head-state").textContent = this.$(".state").textContent;
     const toggle = this.$(".toggle");
     toggle.textContent = t.stop_at ? "Fortsetzen" : "Pause";
     toggle.className = t.stop_at ? "ok toggle" : "warn toggle";
