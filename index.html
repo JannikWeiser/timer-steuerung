@@ -28,11 +28,19 @@
   .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
   .live.on { color: var(--ok); }
   .live.on::before { background: var(--ok); }
-  button.lead-switch { font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 999px;
-                       background: transparent; color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
-  button.lead-switch::before { content: "○ "; }
-  button.lead-switch.on { background: var(--ok); color: #0b1a11; border-color: var(--ok); }
-  button.lead-switch.on::before { content: "● "; }
+  /* Gemeinsamer Umschalter "Optimiert Lead" */
+  button.switch { display: inline-flex; align-items: center; gap: 10px; padding: 7px 12px 7px 8px;
+                  border: 2px solid var(--line); background: var(--panel); color: var(--muted); white-space: nowrap; }
+  .switch .track { position: relative; width: 40px; height: 22px; border-radius: 999px; background: var(--line);
+                   flex: none; transition: background .15s; }
+  .switch .knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
+                  background: var(--muted); transition: left .15s, background .15s; }
+  .switch .switch-state { font-size: 12px; font-weight: 800; letter-spacing: .06em; min-width: 3ch;
+                          padding: 2px 6px; border-radius: 4px; background: var(--panel-2); }
+  button.switch[aria-checked="true"] { border-color: var(--ok); color: var(--text); background: rgba(47, 191, 113, .14); }
+  .switch[aria-checked="true"] .track { background: var(--ok); }
+  .switch[aria-checked="true"] .knob { left: 21px; background: #fff; }
+  .switch[aria-checked="true"] .switch-state { background: var(--ok); color: #0b1a11; }
 
   form.login { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; }
   @media (max-width: 520px) { form.login { grid-template-columns: 1fr; } }
@@ -80,7 +88,9 @@
     header { flex-wrap: nowrap; gap: 6px; padding: 8px 10px calc(8px) 10px;
              padding-top: max(8px, env(safe-area-inset-top)); }
     header h1 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 0 2px 0 0; }
+    header { flex-wrap: wrap; }
     header button { flex: 1; padding: 10px 4px; font-size: 14px; }
+    header button.switch { order: -1; flex: 1 0 100%; justify-content: center; padding: 6px 10px; }
     main { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr); grid-template-rows: repeat(2, minmax(0, 1fr));
            gap: 8px; padding: 8px 10px; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
     .panel { padding: 8px; gap: 6px; min-height: 0; border-radius: 10px; }
@@ -88,7 +98,6 @@
     .panel-head h2 { font-size: 15px; flex: 1 1 auto; min-width: 0; }
     .badge { font-size: 11px; padding: 2px 6px; }
     .live { font-size: 0; gap: 0; }
-    button.lead-switch { font-size: 11px; padding: 3px 7px; }
     button.ghost { padding: 4px 6px; font-size: 12px; }
     form.login { grid-template-columns: 1fr 1fr; }
     form.login button { grid-column: 1 / -1; }
@@ -111,6 +120,12 @@
 <body>
 <header>
   <h1><span class="long">Timer-Steuerung</span><span class="short">Beide:</span></h1>
+  <button class="switch" id="lead-switch" type="button" role="switch" aria-checked="false"
+          title="Beide Timer: nach der Vorbereitung anhalten, Reset ohne automatischen Start, am Rundenende auf 00:00 stehen bleiben">
+    <span class="track"><span class="knob"></span></span>
+    <span class="switch-label">Optimiert Lead</span>
+    <span class="switch-state">AUS</span>
+  </button>
   <button class="primary" id="all-restart"><span class="long">Beide neu starten</span><span class="short">Neustart</span></button>
   <button class="warn" id="all-pause"><span class="long">Beide pausieren</span><span class="short">Pause</span></button>
   <button class="ok" id="all-resume"><span class="long">Beide fortsetzen</span><span class="short">Weiter</span></button>
@@ -124,7 +139,6 @@
       <h2>Nicht verbunden</h2>
       <span class="live hidden"></span>
       <span class="head-state mobile-only"></span>
-      <button class="lead-switch hidden" type="button" title="Nach der Vorbereitung anhalten, Reset ohne automatischen Start, am Rundenende auf 00:00 stehen bleiben"><span class="long">Optimiert Lead</span><span class="short">Lead</span></button>
       <button class="ghost copy mobile-only hidden" type="button">Link</button>
       <button class="ghost logout hidden" type="button" title="Abmelden"><span class="long">Abmelden</span><span class="short">✕</span></button>
     </div>
@@ -209,6 +223,9 @@ const store = {
   del(k) { try { localStorage.removeItem(k); } catch {} },
 };
 
+// "Optimiert Lead" gilt für beide Timer; übernimmt die frühere Einstellung pro Timer
+let leadMode = store.get("leadMode") ?? ["A", "B"].some(s => store.get("slot:" + s)?.lead);
+
 class TimerPanel {
   constructor(slot) {
     this.slot = slot;
@@ -229,7 +246,6 @@ class TimerPanel {
       this.restart();
     });
     this.$(".toggle").addEventListener("click", () => this.timer && isFrozen(this.timer, this.now()) ? this.resume() : this.pause());
-    this.$(".lead-switch").addEventListener("click", () => { this.leadMode = !this.leadMode; this.saveSlot({ lead: this.leadMode }); this.render(); });
     this.skipHtml = this.$(".skip").innerHTML;
     this.$(".skip").addEventListener("click", () => this.skip());
     this.el.querySelectorAll(".copy").forEach(b => b.addEventListener("click", () => {
@@ -237,12 +253,13 @@ class TimerPanel {
     }));
 
     const saved = store.get("slot:" + slot);
-    this.leadMode = !!saved?.lead;
     if (saved?.id) {
       this.$("[name=id]").value = saved.id;
       if (saved.token) { this.id = saved.id; this.token = saved.token; this.showConnected(); }
     }
   }
+
+  get leadMode() { return leadMode; }   // gemeinsamer Schalter für beide Timer
 
   saveSlot(patch) {
     const v = { ...store.get("slot:" + this.slot), ...patch };
@@ -284,7 +301,6 @@ class TimerPanel {
     this.$("form.login").classList.remove("hidden");
     this.$(".logout").classList.add("hidden");
     this.$(".panel-head .copy").classList.add("hidden");
-    this.$(".lead-switch").classList.add("hidden");
     this.$("h2").textContent = "Nicht verbunden";
     this.$("iframe").src = "about:blank";
     this.msg("");
@@ -295,7 +311,6 @@ class TimerPanel {
     this.$(".connected").classList.remove("hidden");
     this.$(".logout").classList.remove("hidden");
     this.$(".panel-head .copy").classList.remove("hidden");
-    this.$(".lead-switch").classList.remove("hidden");
     this.$("h2").textContent = this.id;
     this.$("iframe").src = this.displayUrl();
     this.$(".display-url").textContent = this.displayUrl();
@@ -436,7 +451,6 @@ class TimerPanel {
     this.$(".time").textContent = fmt(remaining + (segment.count_to || 0));
     const now = this.now(), frozen = isFrozen(t, now);
     const toggle = this.$(".toggle"), skip = this.$(".skip"), restart = this.$(".restart");
-    this.$(".lead-switch").classList.toggle("on", this.leadMode);
     if (this.leadMode) {
       const phase = this.leadPhase(t, now);
       this.$(".state").textContent = { ready: "bereit", prep: "Vorbereitung", prepDone: "wartet auf Start",
@@ -468,14 +482,18 @@ const panels = ["A", "B"].map(s => new TimerPanel(s));
 panels.forEach(p => document.getElementById("panels").appendChild(p.el));
 
 document.getElementById("all-restart").onclick = () => {
-  if (confirm(`Beide Timer ${allLead() ? "zurücksetzen" : "neu starten"}?`)) panels.forEach(p => p.restart());
+  if (confirm(`Beide Timer ${leadMode ? "zurücksetzen" : "neu starten"}?`)) panels.forEach(p => p.restart());
 };
-const allLead = () => panels.filter(p => p.token).every(p => p.leadMode) && panels.some(p => p.token);
+const leadSwitch = document.getElementById("lead-switch");
+leadSwitch.onclick = () => { leadMode = !leadMode; store.set("leadMode", leadMode); renderHeader(); panels.forEach(p => p.render()); };
 function renderHeader() {
-  const l = allLead(), btn = document.getElementById("all-restart");
-  btn.querySelector(".long").textContent = l ? "Beide zurücksetzen" : "Beide neu starten";
-  btn.querySelector(".short").textContent = l ? "Reset" : "Neustart";
+  leadSwitch.setAttribute("aria-checked", String(leadMode));
+  leadSwitch.querySelector(".switch-state").textContent = leadMode ? "AN" : "AUS";
+  const btn = document.getElementById("all-restart");
+  btn.querySelector(".long").textContent = leadMode ? "Beide zurücksetzen" : "Beide neu starten";
+  btn.querySelector(".short").textContent = leadMode ? "Reset" : "Neustart";
 }
+renderHeader();
 document.getElementById("all-pause").onclick = () => panels.forEach(p => p.pause());
 document.getElementById("all-resume").onclick = () => panels.forEach(p => p.resume());
 
