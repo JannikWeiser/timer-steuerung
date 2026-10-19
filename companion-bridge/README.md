@@ -12,6 +12,7 @@ Der Schlüssel steht nicht in diesem (öffentlichen) Repo, sondern nur als Secre
 
 | Adresse | Wirkung |
 |---|---|
+| `<timer>/weiter` | Nächster Schritt im Lead-Ablauf: bereit → Start, wartet → Klettern, pausiert → Fortsetzen, beendet → Reset. Läuft die Uhr, passiert nichts. |
 | `<timer>/reset` | Zurück auf Anfang, Uhr steht |
 | `<timer>/start` | Vorbereitung starten (hält danach automatisch an) |
 | `<timer>/klettern` | Kletterzeit starten (auch direkt aus Reset) |
@@ -33,13 +34,15 @@ Der Schlüssel steht nicht in diesem (öffentlichen) Repo, sondern nur als Secre
    *Feedbacks* → `http: Image from URL` → URI `A/taste.png`, **Poll Interval 1000** (ms).
    Tipp: Live-Taste und Start/Pause zusammenlegen – die Live-Taste bekommt zusätzlich die Press action `A/startpause`.
 
-### Vorschlag für ein 15er Stream Deck
+### Eingerichtet: Stream Deck Mini, Companion-Seite 3
 
-| | | | | |
-|---|---|---|---|---|
-| **A Live** (Bild A, Druck: `A/startpause`) | A Reset | A Klettern ▶ | A Segment ⏭ | Beide Reset |
-| **B Live** (Bild B, Druck: `B/startpause`) | B Reset | B Klettern ▶ | B Segment ⏭ | Beide Pause |
-| A Start | B Start | | | Beide Fortsetzen |
+| | | |
+|---|---|---|
+| UP (Navigation) | **A live** – Bild `A/taste.png`, Druck `A/weiter` | **B live** – Bild `B/taste.png`, Druck `B/weiter` |
+| **PAUSE BEIDE** – `beide/pause` | **RESET A** – `A/reset` | **RESET B** – `B/reset` |
+
+Die Live-Tasten zeigen oben Timer und Phase, in der Mitte die Zeit und unten, was der nächste Druck macht
+(„> START“, „> KLETTERN“, „> WEITER“, „> RESET“). Nach einer Pause geht es mit der Live-Taste weiter.
 
 ## Kosten / Grenzen (Cloudflare Workers Free)
 

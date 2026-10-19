@@ -3,7 +3,7 @@
 // mit derselben Logik wie die Steuerseite im Modus "Optimiert Lead".
 //
 // Adressen (KEY = geheimer Schlüssel aus BRIDGE_KEY):
-//   /KEY/A/reset | start | klettern | pause | fortsetzen | startpause | segment | neustart
+//   /KEY/A/weiter | reset | start | klettern | pause | fortsetzen | startpause | segment | neustart
 //   /KEY/B/...   /KEY/beide/...
 //   /KEY/A/status        JSON mit Phase, Zeit, Farbe
 //   /KEY/A/zeit          nur die Anzeige-Zeit als Text (z. B. "05:32")
@@ -85,6 +85,11 @@ const ACTIONS = {
 };
 ACTIONS.start = ACTIONS.fortsetzen;
 ACTIONS.startpause = (t, now) => (isFrozen(t, now) ? ACTIONS.fortsetzen(t, now) : ACTIONS.pause(t, now));
+// Eine Taste für den ganzen Lead-Ablauf: bereit → Start, wartet → Klettern, pausiert → Fortsetzen, beendet → Reset.
+// Läuft die Uhr, passiert nichts (kein versehentliches Anhalten).
+const NEXT = { ready: "fortsetzen", prepDone: "klettern", paused: "fortsetzen", done: "reset" };
+ACTIONS.weiter = (t, now) => { const a = NEXT[leadPhase(t, now)]; return a ? ACTIONS[a](t, now) : null; };
+const NEXT_TEXT = { ready: "> START", prepDone: "> KLETTERN", paused: "> WEITER", done: "> RESET" };
 
 // ---------- ITsBlue-API ----------
 const tokens = {}; // pro Worker-Instanz zwischengespeichert; Tokens laufen bei ITsBlue nicht ab
@@ -142,7 +147,7 @@ const FONT = { // 5×7 Pixel
   "6": ["00110","01000","10000","11110","10001","10001","01110"], "7": ["11111","00001","00010","00100","01000","01000","01000"],
   "8": ["01110","10001","10001","01110","10001","10001","01110"], "9": ["01110","10001","10001","01111","00001","00010","01100"],
   ":": ["00000","01100","01100","00000","01100","01100","00000"], " ": ["00000","00000","00000","00000","00000","00000","00000"],
-  "-": ["00000","00000","00000","11111","00000","00000","00000"], ".": ["00000","00000","00000","00000","00000","01100","01100"],
+  "-": ["00000","00000","00000","11111","00000","00000","00000"], ">": ["10000","01000","00100","00010","00100","01000","10000"], ".": ["00000","00000","00000","00000","00000","01100","01100"],
   A: ["01110","10001","10001","11111","10001","10001","10001"], B: ["11110","10001","10001","11110","10001","10001","11110"],
   C: ["01110","10001","10000","10000","10000","10001","01110"], D: ["11100","10010","10001","10001","10001","10010","11100"],
   E: ["11111","10000","10000","11110","10000","10000","11111"], F: ["11111","10000","10000","11110","10000","10000","10000"],
@@ -191,7 +196,12 @@ async function renderKey(st, slot, size = 144) {
   const head = st.error ? `${slot} FEHLER` : `${slot} ${PHASE_SHORT[st.phase]}`;
   drawText(px, size, head, fitScale(head, size, 3), 15, [255, 255, 255]);
   const zeit = st.error ? "--:--" : st.zeit;
-  drawText(px, size, zeit, fitScale(zeit, size, 5), 88, fg);
+  const hint = st.error ? "" : NEXT_TEXT[st.phase] || "";
+  drawText(px, size, zeit, fitScale(zeit, size, 5), hint ? 76 : 88, fg);
+  if (hint) {                                   // Fußzeile: was der nächste Druck auf "weiter" macht
+    for (let y = size - 30; y < size; y++) for (let x = 0; x < size; x++) { const i = (y * size + x) * 3; px[i] = px[i] * 0.35; px[i + 1] = px[i + 1] * 0.35; px[i + 2] = px[i + 2] * 0.35; }
+    drawText(px, size, hint, fitScale(hint, size, 2), size - 15, [255, 255, 255]);
+  }
   return encodePng(px, size, size);
 }
 
