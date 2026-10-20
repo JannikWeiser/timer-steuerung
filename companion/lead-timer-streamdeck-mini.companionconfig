@@ -1,0 +1,442 @@
+{
+  "version": 3,
+  "type": "page",
+  "controls": {
+    "bank:3-1": {
+      "type": "button",
+      "style": {
+        "text": "RESET\\nbeide\\n(halten)",
+        "size": "auto",
+        "png": null,
+        "alignment": "center:center",
+        "pngalignment": "center:center",
+        "color": 16777215,
+        "bgcolor": 13899324,
+        "show_topbar": "default"
+      },
+      "options": {
+        "relativeDelay": false,
+        "stepAutoProgress": true
+      },
+      "feedbacks": [],
+      "steps": {
+        "0": {
+          "action_sets": {
+            "1000": [
+              {
+                "id": "pHzWKnPuoCVe8cGZuBssN",
+                "action": "send_command",
+                "instance": "HZ4UVBOpPylOMWMO_FeNR",
+                "options": {
+                  "data": "beide:reset"
+                },
+                "delay": 0
+              }
+            ],
+            "down": [],
+            "up": []
+          },
+          "options": {
+            "runWhileHeld": []
+          }
+        }
+      }
+    },
+    "bank:3-2": {
+      "type": "button",
+      "style": {
+        "text": "$(streamdeck:r1_uhr)",
+        "size": "auto",
+        "png": null,
+        "alignment": "center:center",
+        "pngalignment": "center:center",
+        "color": 16777215,
+        "bgcolor": 2764602,
+        "show_topbar": "default"
+      },
+      "options": {
+        "relativeDelay": false,
+        "stepAutoProgress": true
+      },
+      "feedbacks": [
+        {
+          "id": "S3GtiDCynVE6knmFGUI7d",
+          "type": "websocket_variable",
+          "instance_id": "HZ4UVBOpPylOMWMO_FeNR",
+          "options": {
+            "subpath": "1.uhr",
+            "variable": "r1_uhr"
+          },
+          "style": {},
+          "isInverted": false
+        },
+        {
+          "id": "w_4YUU0HS-IpGrrbBdfJW",
+          "type": "websocket_variable",
+          "instance_id": "HZ4UVBOpPylOMWMO_FeNR",
+          "options": {
+            "subpath": "1.uhrfarbe",
+            "variable": "r1_farbe"
+          },
+          "style": {},
+          "isInverted": false
+        },
+        {
+          "id": "02tGYIoKt-64yRaGwwqCj",
+          "type": "variable_value",
+          "instance_id": "internal",
+          "options": {
+            "variable": "streamdeck:r1_farbe",
+            "op": "eq",
+            "value": "rot"
+          },
+          "style": {
+            "color": 16777215,
+            "bgcolor": 16711680
+          },
+          "isInverted": false
+        },
+        {
+          "id": "sMBbRlANlms50GswmN8By",
+          "type": "variable_value",
+          "instance_id": "internal",
+          "options": {
+            "variable": "streamdeck:r1_farbe",
+            "op": "eq",
+            "value": "gruen"
+          },
+          "style": {
+            "color": 16777215,
+            "bgcolor": 39168
+          },
+          "isInverted": false
+        }
+      ],
+      "steps": {
+        "0": {
+          "action_sets": {
+            "down": [],
+            "up": []
+          },
+          "options": {
+            "runWhileHeld": []
+          }
+        }
+      }
+    },
+    "bank:3-3": {
+      "type": "button",
+      "style": {
+        "text": "$(streamdeck:r2_uhr)",
+        "size": "auto",
+        "png": null,
+        "alignment": "center:center",
+        "pngalignment": "center:center",
+        "color": 16777215,
+        "bgcolor": 2764602,
+        "show_topbar": "default"
+      },
+      "options": {
+        "relativeDelay": false,
+        "stepAutoProgress": true
+      },
+      "feedbacks": [
+        {
+          "id": "vH0R5_LUIbMHd4SEgcvU4",
+          "type": "websocket_variable",
+          "instance_id": "HZ4UVBOpPylOMWMO_FeNR",
+          "options": {
+            "subpath": "2.uhr",
+            "variable": "r2_uhr"
+          },
+          "style": {},
+          "isInverted": false
+        },
+        {
+          "id": "gDi7cDXXZkaCIbnXWaYTS",
+          "type": "websocket_variable",
+          "instance_id": "HZ4UVBOpPylOMWMO_FeNR",
+          "options": {
+            "subpath": "2.uhrfarbe",
+            "variable": "r2_farbe"
+          },
+          "style": {},
+          "isInverted": false
+        },
+        {
+          "id": "2Rk2oD_kcEeV33Jgdluh5",
+          "type": "variable_value",
+          "instance_id": "internal",
+          "options": {
+            "variable": "streamdeck:r2_farbe",
+            "op": "eq",
+            "value": "rot"
+          },
+          "style": {
+            "color": 16777215,
+            "bgcolor": 16711680
+          },
+          "isInverted": false
+        },
+        {
+          "id": "20OIZ35fQDPTP3VLHRGJr",
+          "type": "variable_value",
+          "instance_id": "internal",
+          "options": {
+            "variable": "streamdeck:r2_farbe",
+            "op": "eq",
+            "value": "gruen"
+          },
+          "style": {
+            "color": 16777215,
+            "bgcolor": 39168
+          },
+          "isInverted": false
+        }
+      ],
+      "steps": {
+        "0": {
+          "action_sets": {
+            "down": [],
+            "up": []
+          },
+          "options": {
+            "runWhileHeld": []
+          }
+        }
+      }
+    },
+    "bank:3-10": {
+      "type": "button",
+      "style": {
+        "text": "$(streamdeck:r1_aktion)",
+        "size": "auto",
+        "png": null,
+        "alignment": "center:center",
+        "pngalignment": "center:center",
+        "color": 16777215,
+        "bgcolor": 39168,
+        "show_topbar": "default"
+      },
+      "options": {
+        "relativeDelay": false,
+        "stepAutoProgress": true
+      },
+      "feedbacks": [
+        {
+          "id": "iFPlXysfMfhVv-8ZIUKJE",
+          "type": "websocket_variable",
+          "instance_id": "HZ4UVBOpPylOMWMO_FeNR",
+          "options": {
+            "subpath": "1.aktion",
+            "variable": "r1_aktion"
+          },
+          "style": {},
+          "isInverted": false
+        },
+        {
+          "id": "J2oOrBTPvKw4EF4BQPRgS",
+          "type": "websocket_variable",
+          "instance_id": "HZ4UVBOpPylOMWMO_FeNR",
+          "options": {
+            "subpath": "1.aktionfarbe",
+            "variable": "r1_akfarbe"
+          },
+          "style": {},
+          "isInverted": false
+        },
+        {
+          "id": "l9Ju8KjsMPXqYzs2ZUMZP",
+          "type": "variable_value",
+          "instance_id": "internal",
+          "options": {
+            "variable": "streamdeck:r1_akfarbe",
+            "op": "eq",
+            "value": "reset"
+          },
+          "style": {
+            "color": 16777215,
+            "bgcolor": 16711680
+          },
+          "isInverted": false
+        },
+        {
+          "id": "UydSKtXEHE9XGl5DUJrFY",
+          "type": "variable_value",
+          "instance_id": "internal",
+          "options": {
+            "variable": "streamdeck:r1_akfarbe",
+            "op": "eq",
+            "value": "pause"
+          },
+          "style": {
+            "color": 16777215,
+            "bgcolor": 16744448
+          },
+          "isInverted": false
+        },
+        {
+          "id": "TcgUyTrscMCkfm3LWnKtW",
+          "type": "variable_value",
+          "instance_id": "internal",
+          "options": {
+            "variable": "streamdeck:r1_akfarbe",
+            "op": "eq",
+            "value": "aus"
+          },
+          "style": {
+            "color": 16777215,
+            "bgcolor": 4737096
+          },
+          "isInverted": false
+        }
+      ],
+      "steps": {
+        "0": {
+          "action_sets": {
+            "down": [
+              {
+                "id": "WIZMK6q5yEVNIubcY-onU",
+                "action": "send_command",
+                "instance": "HZ4UVBOpPylOMWMO_FeNR",
+                "options": {
+                  "data": "1:next"
+                },
+                "delay": 0
+              }
+            ],
+            "up": []
+          },
+          "options": {
+            "runWhileHeld": []
+          }
+        }
+      }
+    },
+    "bank:3-11": {
+      "type": "button",
+      "style": {
+        "text": "$(streamdeck:r2_aktion)",
+        "size": "auto",
+        "png": null,
+        "alignment": "center:center",
+        "pngalignment": "center:center",
+        "color": 16777215,
+        "bgcolor": 39168,
+        "show_topbar": "default"
+      },
+      "options": {
+        "relativeDelay": false,
+        "stepAutoProgress": true
+      },
+      "feedbacks": [
+        {
+          "id": "9JugWzxxm-tlPeigIrlzH",
+          "type": "websocket_variable",
+          "instance_id": "HZ4UVBOpPylOMWMO_FeNR",
+          "options": {
+            "subpath": "2.aktion",
+            "variable": "r2_aktion"
+          },
+          "style": {},
+          "isInverted": false
+        },
+        {
+          "id": "SKV5EH8aAS5fe7D1Vp8my",
+          "type": "websocket_variable",
+          "instance_id": "HZ4UVBOpPylOMWMO_FeNR",
+          "options": {
+            "subpath": "2.aktionfarbe",
+            "variable": "r2_akfarbe"
+          },
+          "style": {},
+          "isInverted": false
+        },
+        {
+          "id": "PyNoLbKrn5-ZyiH5OxnAF",
+          "type": "variable_value",
+          "instance_id": "internal",
+          "options": {
+            "variable": "streamdeck:r2_akfarbe",
+            "op": "eq",
+            "value": "reset"
+          },
+          "style": {
+            "color": 16777215,
+            "bgcolor": 16711680
+          },
+          "isInverted": false
+        },
+        {
+          "id": "6JZkw3Lp45Le3RuBBqQI9",
+          "type": "variable_value",
+          "instance_id": "internal",
+          "options": {
+            "variable": "streamdeck:r2_akfarbe",
+            "op": "eq",
+            "value": "pause"
+          },
+          "style": {
+            "color": 16777215,
+            "bgcolor": 16744448
+          },
+          "isInverted": false
+        },
+        {
+          "id": "nQJB6cxJrpf2m3f5cxtKr",
+          "type": "variable_value",
+          "instance_id": "internal",
+          "options": {
+            "variable": "streamdeck:r2_akfarbe",
+            "op": "eq",
+            "value": "aus"
+          },
+          "style": {
+            "color": 16777215,
+            "bgcolor": 4737096
+          },
+          "isInverted": false
+        }
+      ],
+      "steps": {
+        "0": {
+          "action_sets": {
+            "down": [
+              {
+                "id": "hEVxzbI5HhGnIyTBPJki4",
+                "action": "send_command",
+                "instance": "HZ4UVBOpPylOMWMO_FeNR",
+                "options": {
+                  "data": "2:next"
+                },
+                "delay": 0
+              }
+            ],
+            "up": []
+          },
+          "options": {
+            "runWhileHeld": []
+          }
+        }
+      }
+    }
+  },
+  "page": {
+    "name": "LEAD TIMER"
+  },
+  "instances": {
+    "HZ4UVBOpPylOMWMO_FeNR": {
+      "instance_type": "generic-websocket",
+      "label": "streamdeck",
+      "isFirstInit": false,
+      "config": {
+        "reconnect": true,
+        "append_new_line": false,
+        "reset_variables": true,
+        "url": "wss://timer-bridge.weiser-jannik.workers.dev/r/KOPPELCODE?role=companion"
+      },
+      "lastUpgradeIndex": 0
+    }
+  },
+  "oldPageNumber": 3
+}

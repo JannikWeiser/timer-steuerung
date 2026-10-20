@@ -1,0 +1,4 @@
+.DS_Store
+*.companionconfig
+!companion/lead-timer-streamdeck-mini.companionconfig
+Anleitung Timer-Steuerung Lead.pdf
